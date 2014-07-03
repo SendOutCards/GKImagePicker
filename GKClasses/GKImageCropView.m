@@ -202,13 +202,12 @@ static CGRect GKScaleRect(CGRect rect, CGFloat scale)
         self.scrollView.clipsToBounds = NO;
         self.scrollView.decelerationRate = 0.0;
         self.scrollView.backgroundColor = [UIColor clearColor];
-        [self addSubview:self.scrollView];
         
         self.imageView = [[UIImageView alloc] initWithFrame:self.scrollView.frame];
         self.imageView.contentMode = UIViewContentModeScaleAspectFit;
         self.imageView.backgroundColor = [UIColor blackColor];
         [self.scrollView addSubview:self.imageView];
-        
+        [self addSubview:self.scrollView];
         
         self.scrollView.minimumZoomScale = CGRectGetWidth(self.scrollView.frame) / CGRectGetWidth(self.imageView.frame);
         self.scrollView.maximumZoomScale = 20.0;
@@ -286,7 +285,7 @@ static CGRect GKScaleRect(CGRect rect, CGFloat scale)
     }
     
     self.scrollView.minimumZoomScale *= ratioConstant;
-    self.scrollView.maximumZoomScale *= self.scrollView.minimumZoomScale;
+    self.scrollView.maximumZoomScale *= ratioConstant;
     self.scrollView.zoomScale = self.scrollView.minimumZoomScale;
 }
 
