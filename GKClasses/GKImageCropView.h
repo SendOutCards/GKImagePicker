@@ -14,6 +14,7 @@
 @property (nonatomic, assign) CGSize cropSize;
 @property (nonatomic, assign) BOOL resizableCropArea;
 
+-(id)initWithFrame:(CGRect)frame andCropImage:(UIImage *)imageToCrop;
 - (UIImage *)croppedImage;
 
 @end

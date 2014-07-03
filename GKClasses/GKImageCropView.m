@@ -99,7 +99,7 @@ static CGRect GKScaleRect(CGRect rect, CGFloat scale)
 - (UIImage *)croppedImage{
     
     //Calculate rect that needs to be cropped
-    CGRect visibleRect = self.resizableCropArea ? [self _calcVisibleRectForResizeableCropArea] : [self _calcVisibleRectForCropArea];
+    CGRect visibleRect = [self _calcVisibleRectForCropArea];
     
     //transform visible rect to image orientation
     CGAffineTransform rectTransform = [self _orientationTransformedRectOfImage:self.imageToCrop];
@@ -107,7 +107,7 @@ static CGRect GKScaleRect(CGRect rect, CGFloat scale)
     
     //finally crop image
     CGImageRef imageRef = CGImageCreateWithImageInRect([self.imageToCrop CGImage], visibleRect);
-    UIImage *result = [UIImage imageWithCGImage:imageRef scale:self.imageToCrop.scale orientation:self.imageToCrop.imageOrientation];
+    UIImage *result = [UIImage imageWithCGImage:imageRef scale:1 orientation:self.imageToCrop.imageOrientation];
     CGImageRelease(imageRef);
     return result;
 }
@@ -142,7 +142,13 @@ static CGRect GKScaleRect(CGRect rect, CGFloat scale)
     }
     //extract visible rect from scrollview and scale it
     CGRect visibleRect = [scrollView convertRect:scrollView.bounds toView:imageView];
-    return visibleRect = GKScaleRect(visibleRect, scale);
+    
+    visibleRect.origin.x = self.scrollView.contentOffset.x / self.scrollView.zoomScale;
+    visibleRect.origin.y = self.scrollView.contentOffset.y / self.scrollView.zoomScale;
+    visibleRect.size.width = self.cropSize.width / (self.scrollView.zoomScale);
+    visibleRect.size.height = self.cropSize.height / (self.scrollView.zoomScale);
+    
+    return visibleRect = GKScaleRect(visibleRect, 1);
 }
 
 
@@ -170,11 +176,9 @@ static CGRect GKScaleRect(CGRect rect, CGFloat scale)
 #pragma mark -
 #pragma Override Methods
 
-- (id)initWithFrame:(CGRect)frame
-{
+- (id)initWithFrame:(CGRect)frame andCropImage:(UIImage *)imageToCrop {
     self = [super initWithFrame:frame];
     if (self) {
-
         self.userInteractionEnabled = YES;
         self.backgroundColor = [UIColor blackColor];
         self.scrollView = [[ScrollView alloc] initWithFrame:self.bounds ];
@@ -186,15 +190,17 @@ static CGRect GKScaleRect(CGRect rect, CGFloat scale)
         self.scrollView.backgroundColor = [UIColor clearColor];
         [self addSubview:self.scrollView];
         
-        self.imageView = [[UIImageView alloc] initWithFrame:self.scrollView.frame];
-        self.imageView.contentMode = UIViewContentModeScaleAspectFit;
+        self.imageView = [[UIImageView alloc] initWithFrame:CGRectMake(0, 0, imageToCrop.size.width, imageToCrop.size.height)];
+        
+        self.imageToCrop = imageToCrop;
+        self.imageView.contentMode = UIViewContentModeScaleToFill;
         self.imageView.backgroundColor = [UIColor blackColor];
         [self.scrollView addSubview:self.imageView];
-    
         
         self.scrollView.minimumZoomScale = CGRectGetWidth(self.scrollView.frame) / CGRectGetWidth(self.imageView.frame);
+        
         self.scrollView.maximumZoomScale = 20.0;
-        [self.scrollView setZoomScale:1.0];
+        [self.scrollView setZoomScale:self.scrollView.minimumZoomScale];
     }
     return self;
 }
