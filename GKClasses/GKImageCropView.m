@@ -26,7 +26,7 @@ static CGRect GKScaleRect(CGRect rect, CGFloat scale)
 
 - (void)layoutSubviews{
     [super layoutSubviews];
-
+    
     UIView *zoomView = [self.delegate viewForZoomingInScrollView:self];
     
     CGSize boundsSize = self.bounds.size;
@@ -99,7 +99,7 @@ static CGRect GKScaleRect(CGRect rect, CGFloat scale)
 - (UIImage *)croppedImage{
     
     //Calculate rect that needs to be cropped
-    CGRect visibleRect = [self _calcVisibleRectForCropArea];
+    CGRect visibleRect = self.resizableCropArea ? [self _calcVisibleRectForResizeableCropArea] : [self _calcVisibleRectForCropArea];
     
     //transform visible rect to image orientation
     CGAffineTransform rectTransform = [self _orientationTransformedRectOfImage:self.imageToCrop];
@@ -107,7 +107,7 @@ static CGRect GKScaleRect(CGRect rect, CGFloat scale)
     
     //finally crop image
     CGImageRef imageRef = CGImageCreateWithImageInRect([self.imageToCrop CGImage], visibleRect);
-    UIImage *result = [UIImage imageWithCGImage:imageRef scale:1 orientation:self.imageToCrop.imageOrientation];
+    UIImage *result = [UIImage imageWithCGImage:imageRef scale:self.imageToCrop.scale orientation:self.imageToCrop.imageOrientation];
     CGImageRelease(imageRef);
     return result;
 }
@@ -141,14 +141,26 @@ static CGRect GKScaleRect(CGRect rect, CGFloat scale)
                  MAX(scaleWidth, scaleHeight));
     }
     //extract visible rect from scrollview and scale it
-    CGRect visibleRect = [scrollView convertRect:scrollView.bounds toView:imageView];
+    return [self computeVisibleRect];
+}
+
+- (CGRect)computeVisibleRect
+{
+    CGRect frame;
+    float  scale;
     
-    visibleRect.origin.x = self.scrollView.contentOffset.x / self.scrollView.zoomScale;
-    visibleRect.origin.y = self.scrollView.contentOffset.y / self.scrollView.zoomScale;
-    visibleRect.size.width = self.cropSize.width / (self.scrollView.zoomScale);
-    visibleRect.size.height = self.cropSize.height / (self.scrollView.zoomScale);
+    scale = self.imageView.frame.size.width / self.imageToCrop.size.width;
     
-    return visibleRect = GKScaleRect(visibleRect, 1);
+    // compute the widget size based on the zoom scale
+    frame.size.width  = self.cropSize.width  / scale;
+    frame.size.height = self.cropSize.height / scale;
+    
+    // compute the widget position based on the zoom scale and contentOffset
+    frame.origin.x = self.scrollView.contentOffset.x / scale;
+    frame.origin.y = self.scrollView.contentOffset.y / scale;
+    
+    // return the widget coordinates in the coordinate system of the view that contains the scroll view
+    return( frame );
 }
 
 
@@ -176,9 +188,11 @@ static CGRect GKScaleRect(CGRect rect, CGFloat scale)
 #pragma mark -
 #pragma Override Methods
 
-- (id)initWithFrame:(CGRect)frame andCropImage:(UIImage *)imageToCrop {
+- (id)initWithFrame:(CGRect)frame
+{
     self = [super initWithFrame:frame];
     if (self) {
+        
         self.userInteractionEnabled = YES;
         self.backgroundColor = [UIColor blackColor];
         self.scrollView = [[ScrollView alloc] initWithFrame:self.bounds ];
@@ -186,21 +200,19 @@ static CGRect GKScaleRect(CGRect rect, CGFloat scale)
         self.scrollView.showsVerticalScrollIndicator = NO;
         self.scrollView.delegate = self;
         self.scrollView.clipsToBounds = NO;
-        self.scrollView.decelerationRate = 0.0; 
+        self.scrollView.decelerationRate = 0.0;
         self.scrollView.backgroundColor = [UIColor clearColor];
         [self addSubview:self.scrollView];
         
-        self.imageView = [[UIImageView alloc] initWithFrame:CGRectMake(0, 0, imageToCrop.size.width, imageToCrop.size.height)];
-        
-        self.imageToCrop = imageToCrop;
-        self.imageView.contentMode = UIViewContentModeScaleToFill;
+        self.imageView = [[UIImageView alloc] initWithFrame:self.scrollView.frame];
+        self.imageView.contentMode = UIViewContentModeScaleAspectFit;
         self.imageView.backgroundColor = [UIColor blackColor];
         [self.scrollView addSubview:self.imageView];
         
-        self.scrollView.minimumZoomScale = CGRectGetWidth(self.scrollView.frame) / CGRectGetWidth(self.imageView.frame);
         
+        self.scrollView.minimumZoomScale = CGRectGetWidth(self.scrollView.frame) / CGRectGetWidth(self.imageView.frame);
         self.scrollView.maximumZoomScale = 20.0;
-        [self.scrollView setZoomScale:self.scrollView.minimumZoomScale];
+        [self.scrollView setZoomScale:1.0];
     }
     return self;
 }
@@ -209,7 +221,7 @@ static CGRect GKScaleRect(CGRect rect, CGFloat scale)
 - (UIView *)hitTest:(CGPoint)point withEvent:(UIEvent *)event{
     if (!self.resizableCropArea)
         return self.scrollView;
-
+    
     GKResizeableCropOverlayView* resizeableCropView = (GKResizeableCropOverlayView*)self.cropOverlayView;
     
     CGRect outerFrame = CGRectInset(resizeableCropView.cropBorderView.frame, -10 , -10);
@@ -238,7 +250,7 @@ static CGRect GKScaleRect(CGRect rect, CGFloat scale)
     CGFloat toolbarSize = UI_USER_INTERFACE_IDIOM() == UIUserInterfaceIdiomPad ? 0 : 54;
     self.xOffset = floor((CGRectGetWidth(self.bounds) - size.width) * 0.5);
     self.yOffset = floor((CGRectGetHeight(self.bounds) - toolbarSize - size.height) * 0.5); //fixed
-
+    
     CGFloat height = self.imageToCrop.size.height;
     CGFloat width = self.imageToCrop.size.width;
     
@@ -263,6 +275,19 @@ static CGRect GKScaleRect(CGRect rect, CGFloat scale)
     self.scrollView.frame = CGRectMake(xOffset, yOffset, size.width, size.height);
     self.scrollView.contentSize = CGSizeMake(size.width, size.height);
     self.imageView.frame = CGRectMake(0, floor((size.height - faktoredHeight) * 0.5), faktoredWidth, faktoredHeight);
+    
+    CGSize imageSize = self.imageView.frame.size;
+    
+    CGFloat ratioConstant = 1;
+    if( self.cropSize.height > imageSize.height ) {
+        ratioConstant = self.cropSize.height / imageSize.height;
+    } else if( self.cropSize.width > imageSize.width ) {
+        ratioConstant = self.cropSize.width / imageSize.width;
+    }
+    
+    self.scrollView.minimumZoomScale *= ratioConstant;
+    self.scrollView.maximumZoomScale *= self.scrollView.minimumZoomScale;
+    self.scrollView.zoomScale = self.scrollView.minimumZoomScale;
 }
 
 #pragma mark -
