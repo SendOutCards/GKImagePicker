@@ -278,9 +278,9 @@ static CGRect GKScaleRect(CGRect rect, CGFloat scale)
     CGSize imageSize = self.imageView.frame.size;
     
     CGFloat ratioConstant = 1;
-    if( self.cropSize.height > imageSize.height ) {
+    if( self.cropSize.height > roundf(imageSize.height) ) {
         ratioConstant = self.cropSize.height / imageSize.height;
-    } else if( self.cropSize.width > imageSize.width ) {
+    } else if( self.cropSize.width > roundf(imageSize.width) ) {
         ratioConstant = self.cropSize.width / imageSize.width;
     }
     
